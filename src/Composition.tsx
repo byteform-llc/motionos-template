@@ -7,86 +7,17 @@ import {
   Easing,
   Sequence,
 } from "remotion";
+import { Ring } from "./components/Ring";
+import { OrbitDot } from "./components/OrbitDot";
 
-// Animated dot that pulses and orbits
-const OrbitDot: React.FC<{
-  angle: number;
-  radius: number;
-  delay: number;
-  color: string;
-  size: number;
-}> = ({ angle, radius, delay, color, size }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const appear = spring({
-    frame: frame - delay,
-    fps,
-    config: { damping: 12, stiffness: 120 },
-  });
-
-  const currentAngle =
-    angle + interpolate(frame, [0, 300], [0, Math.PI * 2]);
-  const x = Math.cos(currentAngle) * radius;
-  const y = Math.sin(currentAngle) * radius;
-
-  const scale = interpolate(appear, [0, 1], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        backgroundColor: color,
-        transform: `translate(${x}px, ${y}px) scale(${scale})`,
-        top: "50%",
-        left: "50%",
-        marginLeft: -size / 2,
-        marginTop: -size / 2,
-        boxShadow: `0 0 ${size * 2}px ${color}88`,
-      }}
-    />
-  );
+export const CompositionSettings = {
+  fps: 30,
+  width: 1280,
+  height: 720,
+  durationInFrames: 150,
 };
 
-// Animated ring that expands and fades
-const Ring: React.FC<{ delay: number; color: string }> = ({ delay, color }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const progress = interpolate(frame - delay, [0, fps * 1.5], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.quad),
-  });
-
-  const size = interpolate(progress, [0, 1], [60, 400]);
-  const opacity = interpolate(progress, [0, 0.3, 1], [0, 0.6, 0]);
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        border: `2px solid ${color}`,
-        opacity,
-        top: "50%",
-        left: "50%",
-        marginLeft: -size / 2,
-        marginTop: -size / 2,
-      }}
-    />
-  );
-};
-
-export const MyComposition = () => {
+export default function MyComposition() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -125,7 +56,7 @@ export const MyComposition = () => {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
       easing: Easing.out(Easing.exp),
-    }
+    },
   );
   const subtitleOpacity = interpolate(
     frame - subtitleDelay,
@@ -134,7 +65,7 @@ export const MyComposition = () => {
     {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
-    }
+    },
   );
 
   // Line expand
@@ -148,10 +79,28 @@ export const MyComposition = () => {
   const dots = [
     { angle: 0, radius: 90, delay: 5, color: "#818cf8", size: 10 },
     { angle: Math.PI / 3, radius: 90, delay: 8, color: "#a78bfa", size: 7 },
-    { angle: (2 * Math.PI) / 3, radius: 90, delay: 11, color: "#c4b5fd", size: 9 },
+    {
+      angle: (2 * Math.PI) / 3,
+      radius: 90,
+      delay: 11,
+      color: "#c4b5fd",
+      size: 9,
+    },
     { angle: Math.PI, radius: 90, delay: 6, color: "#818cf8", size: 6 },
-    { angle: (4 * Math.PI) / 3, radius: 90, delay: 10, color: "#a78bfa", size: 8 },
-    { angle: (5 * Math.PI) / 3, radius: 90, delay: 7, color: "#c4b5fd", size: 7 },
+    {
+      angle: (4 * Math.PI) / 3,
+      radius: 90,
+      delay: 10,
+      color: "#a78bfa",
+      size: 8,
+    },
+    {
+      angle: (5 * Math.PI) / 3,
+      radius: 90,
+      delay: 7,
+      color: "#c4b5fd",
+      size: 7,
+    },
   ];
 
   return (
@@ -166,7 +115,7 @@ export const MyComposition = () => {
       }}
     >
       {/* Pulse rings */}
-      <Sequence from={0}>
+      <Sequence>
         <Ring delay={0} color="#818cf8" />
       </Sequence>
       <Sequence from={Math.round(fps * 0.5)}>
@@ -277,4 +226,4 @@ export const MyComposition = () => {
       </div>
     </AbsoluteFill>
   );
-};
+}
