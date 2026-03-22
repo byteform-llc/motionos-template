@@ -22,7 +22,7 @@ const ROOT = process.cwd();
 const OUTPUT = "/tmp/wc-snapshots";
 
 // ── Source file exclusions ────────────────────────────────────────────────────
-const EXCLUDE_SOURCE = new Set([
+const EXCLUDE_SOURCE_NAMES = new Set([
   "node_modules",
   ".git",
   "build",
@@ -30,10 +30,14 @@ const EXCLUDE_SOURCE = new Set([
   "dist",
   "scripts",
   ".github",
-  "src/preview.tsx",
-  "src/preview.css",
   "index.html",
   "README.md",
+]);
+
+// Paths relative to ROOT that should be excluded
+const EXCLUDE_SOURCE_PATHS = new Set([
+  "src/preview.tsx",
+  "src/preview.css",
 ]);
 
 // ── node_modules exclusions (reduce snapshot size) ───────────────────────────
@@ -108,6 +112,7 @@ async function writeJsonValue(value, stream) {
 async function buildTree(dir, opts = {}) {
   const {
     excludeNames = new Set(),
+    excludePaths = new Set(),
     excludeDirs = new Set(),
     excludeExts = new Set(),
     visitedInodes = new Set(),
@@ -126,6 +131,8 @@ async function buildTree(dir, opts = {}) {
     if (excludeNames.has(entry.name)) continue;
 
     const fullPath = join(dir, entry.name);
+    const relPath = fullPath.slice(ROOT.length + 1);
+    if (excludePaths.has(relPath)) continue;
 
     try {
       if (entry.isSymbolicLink()) {
@@ -137,6 +144,7 @@ async function buildTree(dir, opts = {}) {
         if (visitedInodes.has(stat.ino)) continue;
         const subtree = await buildTree(fullPath, {
           excludeNames,
+          excludePaths,
           excludeDirs,
           excludeExts,
           visitedInodes: new Set([...visitedInodes, stat.ino]),
@@ -224,7 +232,10 @@ async function main() {
 
   // 1. Source files (always)
   console.log("[1/2] Building source files snapshot…");
-  const filesTree = await buildTree(ROOT, { excludeNames: EXCLUDE_SOURCE });
+  const filesTree = await buildTree(ROOT, {
+    excludeNames: EXCLUDE_SOURCE_NAMES,
+    excludePaths: EXCLUDE_SOURCE_PATHS,
+  });
   console.log(`files/\n${printTree(filesTree)}`);
   const filesUrl = await compressAndUpload("files", filesTree, "files.json.gz");
 
