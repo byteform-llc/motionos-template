@@ -22,7 +22,6 @@ function Preview() {
     if (!window.parent) return;
 
     const onMessage = (event: MessageEvent<EventData>) => {
-      if (event.origin !== window.parent.origin) return;
       const data = event.data;
 
       switch (data.type) {
