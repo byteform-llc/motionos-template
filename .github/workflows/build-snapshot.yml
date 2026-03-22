@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2 # needed to diff against previous commit
+          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -31,42 +31,8 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build snapshots
+      - name: Build and upload snapshots
         run: node scripts/build-snapshot.mjs
         env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           SKIP_NODE_MODULES: ${{ steps.pkg_changed.outputs.changed == 'false' && 'true' || 'false' }}
-
-      - name: Upload to R2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-        run: |
-          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-
-          echo "Uploading files.json.gz…"
-          aws s3 cp /tmp/wc-snapshots/files.json.gz \
-            s3://${R2_BUCKET_NAME}/snapshots/files.json.gz \
-            --endpoint-url "${ENDPOINT}" \
-            --region auto \
-            --content-type "application/json" \
-            --content-encoding "gzip" \
-            --cache-control "no-cache"
-
-          if [ -f /tmp/wc-snapshots/node_modules.json.gz ]; then
-            echo "Uploading node_modules.json.gz…"
-            aws s3 cp /tmp/wc-snapshots/node_modules.json.gz \
-              s3://${R2_BUCKET_NAME}/snapshots/node_modules.json.gz \
-              --endpoint-url "${ENDPOINT}" \
-              --region auto \
-              --content-type "application/json" \
-              --content-encoding "gzip" \
-              --cache-control "no-cache"
-          else
-            echo "Skipping node_modules.json.gz upload (unchanged)."
-          fi
-
-          echo "Done."
-          echo "  files:        ${R2_PUBLIC_URL}/snapshots/files.json.gz"
-          echo "  node_modules: ${R2_PUBLIC_URL}/snapshots/node_modules.json.gz"

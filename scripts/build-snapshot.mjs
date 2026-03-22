@@ -16,6 +16,7 @@ import { createWriteStream } from "fs";
 import { join } from "path";
 import { createGzip } from "zlib";
 import { pipeline } from "stream/promises";
+import { put } from "@vercel/blob";
 
 const ROOT = process.cwd();
 const OUTPUT = "/tmp/wc-snapshots";
@@ -156,24 +157,31 @@ async function buildTree(dir, opts = {}) {
   return tree;
 }
 
-// ── Compress & stream to disk ─────────────────────────────────────────────────
-async function compressToFile(label, tree, outPath) {
-  process.stdout.write(`  Streaming ${label} to ${outPath}…\n`);
+// ── Compress to disk then upload to Vercel Blob ───────────────────────────────
+async function compressAndUpload(label, tree, filename) {
+  const outPath = join(OUTPUT, filename);
+  process.stdout.write(`  Streaming ${label}…\n`);
 
   const gzip = createGzip({ level: 9 });
   const dest = createWriteStream(outPath);
-
-  // Pipe gzip output to file
   const pipePromise = pipeline(gzip, dest);
-
-  // Stream JSON into gzip
   await writeJsonValue(tree, gzip);
   gzip.end();
-
   await pipePromise;
 
   const { size } = await lstat(outPath);
   process.stdout.write(`  Gzipped: ${(size / 1024 / 1024).toFixed(1)} MB\n`);
+
+  process.stdout.write(`  Uploading to Vercel Blob…\n`);
+  const blob = await readFile(outPath);
+  const result = await put(`snapshots/${filename}`, blob, {
+    access: "public",
+    addRandomSuffix: false,
+    contentType: "application/gzip",
+    allowOverwrite: true,
+  });
+  process.stdout.write(`  Uploaded → ${result.url}\n`);
+  return result.url;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -185,7 +193,7 @@ async function main() {
   // 1. Source files (always)
   console.log("[1/2] Building source files snapshot…");
   const filesTree = await buildTree(ROOT, { excludeNames: EXCLUDE_SOURCE });
-  await compressToFile("files", filesTree, join(OUTPUT, "files.json.gz"));
+  const filesUrl = await compressAndUpload("files", filesTree, "files.json.gz");
 
   // 2. node_modules (skippable when package.json unchanged)
   if (skipNodeModules) {
@@ -196,9 +204,11 @@ async function main() {
       excludeDirs: EXCLUDE_NM_DIRS,
       excludeExts: EXCLUDE_NM_EXTS,
     });
-    await compressToFile("node_modules", nmTree, join(OUTPUT, "node_modules.json.gz"));
+    const nmUrl = await compressAndUpload("node_modules", nmTree, "node_modules.json.gz");
+    console.log(`\n  node_modules URL: ${nmUrl}`);
   }
 
+  console.log(`\n  files URL: ${filesUrl}`);
   console.log("\nDone.");
 }
 
