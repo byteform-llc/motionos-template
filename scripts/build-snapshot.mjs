@@ -161,6 +161,25 @@ async function buildTree(dir, opts = {}) {
   return tree;
 }
 
+// ── Tree visualizer ───────────────────────────────────────────────────────────
+function printTree(tree, prefix = "", label = ".") {
+  const lines = [`${prefix}${label}/`];
+  const entries = Object.entries(tree);
+  for (let i = 0; i < entries.length; i++) {
+    const [name, node] = entries[i];
+    const isLast = i === entries.length - 1;
+    const connector = isLast ? "└── " : "├── ";
+    const childPrefix = prefix + (isLast ? "    " : "│   ");
+    if (node.directory) {
+      const subtree = printTree(node.directory, childPrefix, connector + name);
+      lines.push(...subtree.split("\n"));
+    } else {
+      lines.push(`${prefix}${connector}${name}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 // ── Compress to disk then upload to Vercel Blob ───────────────────────────────
 async function compressAndUpload(label, tree, filename) {
   const outPath = join(OUTPUT, filename);
@@ -197,6 +216,7 @@ async function main() {
   // 1. Source files (always)
   console.log("[1/2] Building source files snapshot…");
   const filesTree = await buildTree(ROOT, { excludeNames: EXCLUDE_SOURCE });
+  console.log(printTree(filesTree, "", "files"));
   const filesUrl = await compressAndUpload("files", filesTree, "files.json.gz");
 
   // 2. node_modules (skippable when package.json unchanged)
@@ -210,6 +230,7 @@ async function main() {
       excludeDirs: EXCLUDE_NM_DIRS,
       excludeExts: EXCLUDE_NM_EXTS,
     });
+    console.log(printTree(nmTree, "", "node_modules"));
     const nmUrl = await compressAndUpload(
       "node_modules",
       nmTree,
