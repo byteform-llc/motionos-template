@@ -32,6 +32,7 @@ const EXCLUDE_SOURCE = new Set([
   ".github",
   "/src/preview.tsx",
   "/src/preview.css",
+  "/index.html",
   "README.md",
 ]);
 
