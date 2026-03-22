@@ -11,72 +11,23 @@
  *   Directories:  { directory: { ...children } }
  */
 
-import { readdir, readFile, lstat, readlink, mkdir } from "fs/promises";
+import { readFile, lstat, mkdir } from "fs/promises";
 import { createWriteStream } from "fs";
 import { join } from "path";
 import { createGzip } from "zlib";
 import { pipeline } from "stream/promises";
 import { put } from "@vercel/blob";
+import {
+  ROOT,
+  EXCLUDE_SOURCE_NAMES,
+  EXCLUDE_SOURCE_PATHS,
+  EXCLUDE_NM_DIRS,
+  EXCLUDE_NM_EXTS,
+  buildTree,
+  printTree,
+} from "./snapshot-utils.mjs";
 
-const ROOT = process.cwd();
 const OUTPUT = "/tmp/wc-snapshots";
-
-// ── Source file exclusions ────────────────────────────────────────────────────
-const EXCLUDE_SOURCE_NAMES = new Set([
-  "node_modules",
-  ".git",
-  "build",
-  "out",
-  "dist",
-  "scripts",
-  ".github",
-  "index.html",
-  "README.md",
-]);
-
-// Paths relative to ROOT that should be excluded
-const EXCLUDE_SOURCE_PATHS = new Set([
-  "src/preview.tsx",
-  "src/preview.css",
-]);
-
-// ── node_modules exclusions (reduce snapshot size) ───────────────────────────
-const EXCLUDE_NM_DIRS = new Set([
-  "test",
-  "tests",
-  "__tests__",
-  "spec",
-  "specs",
-  "__mocks__",
-  "docs",
-  "doc",
-  "documentation",
-  "example",
-  "examples",
-  "demo",
-  "demos",
-  "benchmark",
-  "benchmarks",
-  "bench",
-  ".github",
-  ".vscode",
-]);
-
-const EXCLUDE_NM_EXTS = new Set([".map"]);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function isBinary(buf) {
-  const len = Math.min(buf.length, 8192);
-  for (let i = 0; i < len; i++) {
-    if (buf[i] === 0) return true;
-  }
-  return false;
-}
-
-function fileExt(name) {
-  const i = name.lastIndexOf(".");
-  return i === -1 ? "" : name.slice(i);
-}
 
 // ── Streaming JSON writer ─────────────────────────────────────────────────────
 // Writes JSON to a stream token-by-token to avoid building a giant string.
@@ -106,95 +57,6 @@ async function writeJsonValue(value, stream) {
     }
     await write(stream, "}");
   }
-}
-
-// ── Tree builder ─────────────────────────────────────────────────────────────
-async function buildTree(dir, opts = {}) {
-  const {
-    excludeNames = new Set(),
-    excludePaths = new Set(),
-    excludeDirs = new Set(),
-    excludeExts = new Set(),
-    visitedInodes = new Set(),
-  } = opts;
-
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return {};
-  }
-
-  const tree = {};
-
-  for (const entry of entries) {
-    if (excludeNames.has(entry.name)) continue;
-
-    const fullPath = join(dir, entry.name);
-    const relPath = fullPath.slice(ROOT.length + 1);
-    if (excludePaths.has(relPath)) continue;
-
-    try {
-      if (entry.isSymbolicLink()) {
-        const target = await readlink(fullPath);
-        tree[entry.name] = { file: { symlink: target } };
-      } else if (entry.isDirectory()) {
-        if (excludeDirs.has(entry.name)) continue;
-        const stat = await lstat(fullPath);
-        if (visitedInodes.has(stat.ino)) continue;
-        const subtree = await buildTree(fullPath, {
-          excludeNames,
-          excludePaths,
-          excludeDirs,
-          excludeExts,
-          visitedInodes: new Set([...visitedInodes, stat.ino]),
-        });
-        tree[entry.name] = { directory: subtree };
-      } else if (entry.isFile()) {
-        if (excludeExts.has(fileExt(entry.name))) continue;
-        const buf = await readFile(fullPath);
-        if (isBinary(buf)) {
-          tree[entry.name] = {
-            file: { contents: buf.toString("base64"), binary: true },
-          };
-        } else {
-          tree[entry.name] = { file: { contents: buf.toString("utf-8") } };
-        }
-      }
-    } catch (err) {
-      process.stderr.write(`  Skipping ${fullPath}: ${err.message}\n`);
-    }
-  }
-
-  return tree;
-}
-
-// ── Tree visualizer ───────────────────────────────────────────────────────────
-function printTree(tree, prefix = "") {
-  const lines = [];
-  const entries = Object.entries(tree).sort(
-    ([aName, aNode], [bName, bNode]) => {
-      const aIsDir = !!aNode.directory;
-      const bIsDir = !!bNode.directory;
-      if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
-      return aName.localeCompare(bName);
-    },
-  );
-  for (let i = 0; i < entries.length; i++) {
-    const [name, node] = entries[i];
-    const isLast = i === entries.length - 1;
-    const connector = isLast ? "└── " : "├── ";
-    const childPrefix = prefix + (isLast ? "    " : "│   ");
-    if (node.directory) {
-      lines.push(`${prefix}${connector}${name}/`);
-      lines.push(
-        ...printTree(node.directory, childPrefix).split("\n").filter(Boolean),
-      );
-    } else {
-      lines.push(`${prefix}${connector}${name}`);
-    }
-  }
-  return lines.join("\n");
 }
 
 // ── Compress to disk then upload to Vercel Blob ───────────────────────────────
