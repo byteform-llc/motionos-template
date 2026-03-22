@@ -11,12 +11,12 @@
  *   Directories:  { directory: { ...children } }
  */
 
-import { readdir, readFile, lstat, readlink, mkdir, writeFile } from "fs/promises";
+import { readdir, readFile, lstat, readlink, mkdir } from "fs/promises";
+import { createWriteStream } from "fs";
 import { join } from "path";
-import { gzip } from "zlib";
-import { promisify } from "util";
-
-const gzipAsync = promisify(gzip);
+import { createGzip } from "zlib";
+import { pipeline } from "stream/promises";
+import { Readable } from "stream";
 
 const ROOT = process.cwd();
 const OUTPUT = "/tmp/wc-snapshots";
@@ -54,7 +54,7 @@ const EXCLUDE_NM_DIRS = new Set([
   ".vscode",
 ]);
 
-const EXCLUDE_NM_EXTS = new Set([".map"]); // source maps – large, not needed at runtime
+const EXCLUDE_NM_EXTS = new Set([".map"]);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isBinary(buf) {
@@ -65,9 +65,39 @@ function isBinary(buf) {
   return false;
 }
 
-function ext(name) {
+function fileExt(name) {
   const i = name.lastIndexOf(".");
   return i === -1 ? "" : name.slice(i);
+}
+
+// ── Streaming JSON writer ─────────────────────────────────────────────────────
+// Writes JSON to a stream token-by-token to avoid building a giant string.
+function write(stream, data) {
+  return new Promise((resolve, reject) => {
+    const ok = stream.write(data);
+    if (ok) return resolve();
+    stream.once("drain", resolve);
+    stream.once("error", reject);
+  });
+}
+
+async function writeJsonValue(value, stream) {
+  if (value === null) {
+    await write(stream, "null");
+  } else if (typeof value === "boolean" || typeof value === "number") {
+    await write(stream, String(value));
+  } else if (typeof value === "string") {
+    await write(stream, JSON.stringify(value));
+  } else if (typeof value === "object") {
+    await write(stream, "{");
+    const entries = Object.entries(value);
+    for (let i = 0; i < entries.length; i++) {
+      if (i > 0) await write(stream, ",");
+      await write(stream, JSON.stringify(entries[i][0]) + ":");
+      await writeJsonValue(entries[i][1], stream);
+    }
+    await write(stream, "}");
+  }
 }
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
@@ -100,7 +130,7 @@ async function buildTree(dir, opts = {}) {
       } else if (entry.isDirectory()) {
         if (excludeDirs.has(entry.name)) continue;
         const stat = await lstat(fullPath);
-        if (visitedInodes.has(stat.ino)) continue; // guard against circular symlinks
+        if (visitedInodes.has(stat.ino)) continue;
         const subtree = await buildTree(fullPath, {
           excludeNames,
           excludeDirs,
@@ -109,7 +139,7 @@ async function buildTree(dir, opts = {}) {
         });
         tree[entry.name] = { directory: subtree };
       } else if (entry.isFile()) {
-        if (excludeExts.has(ext(entry.name))) continue;
+        if (excludeExts.has(fileExt(entry.name))) continue;
         const buf = await readFile(fullPath);
         if (isBinary(buf)) {
           tree[entry.name] = {
@@ -127,18 +157,24 @@ async function buildTree(dir, opts = {}) {
   return tree;
 }
 
-// ── Compress & write ──────────────────────────────────────────────────────────
-async function compress(label, tree, outPath) {
-  process.stdout.write(`  Serializing ${label}…\n`);
-  const json = JSON.stringify(tree);
-  process.stdout.write(`  JSON size: ${(json.length / 1024 / 1024).toFixed(1)} MB\n`);
+// ── Compress & stream to disk ─────────────────────────────────────────────────
+async function compressToFile(label, tree, outPath) {
+  process.stdout.write(`  Streaming ${label} to ${outPath}…\n`);
 
-  process.stdout.write(`  Compressing…\n`);
-  const gz = await gzipAsync(Buffer.from(json), { level: 9 });
-  process.stdout.write(`  Gzipped: ${(gz.length / 1024 / 1024).toFixed(1)} MB\n`);
+  const gzip = createGzip({ level: 9 });
+  const dest = createWriteStream(outPath);
 
-  await writeFile(outPath, gz);
-  process.stdout.write(`  Written → ${outPath}\n`);
+  // Pipe gzip output to file
+  const pipePromise = pipeline(gzip, dest);
+
+  // Stream JSON into gzip
+  await writeJsonValue(tree, gzip);
+  gzip.end();
+
+  await pipePromise;
+
+  const { size } = await lstat(outPath);
+  process.stdout.write(`  Gzipped: ${(size / 1024 / 1024).toFixed(1)} MB\n`);
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -150,9 +186,9 @@ async function main() {
   // 1. Source files (always)
   console.log("[1/2] Building source files snapshot…");
   const filesTree = await buildTree(ROOT, { excludeNames: EXCLUDE_SOURCE });
-  await compress("files", filesTree, join(OUTPUT, "files.json.gz"));
+  await compressToFile("files", filesTree, join(OUTPUT, "files.json.gz"));
 
-  // 2. node_modules (skippable when package.json hasn't changed)
+  // 2. node_modules (skippable when package.json unchanged)
   if (skipNodeModules) {
     console.log("\n[2/2] Skipping node_modules snapshot (package.json unchanged).");
   } else {
@@ -161,7 +197,7 @@ async function main() {
       excludeDirs: EXCLUDE_NM_DIRS,
       excludeExts: EXCLUDE_NM_EXTS,
     });
-    await compress("node_modules", nmTree, join(OUTPUT, "node_modules.json.gz"));
+    await compressToFile("node_modules", nmTree, join(OUTPUT, "node_modules.json.gz"));
   }
 
   console.log("\nDone.");
