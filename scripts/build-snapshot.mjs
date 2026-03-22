@@ -1,20 +1,18 @@
 #!/usr/bin/env node
 /**
  * Builds two WebContainer filesystem snapshots and writes them to /tmp/wc-snapshots/:
- *   files-{commitSha}.json.gz       — source files (excluding node_modules)
- *   node_modules-{packageHash}.json.gz — pre-installed node_modules
- *   snapshot.env                    — shell-sourceable vars for the upload step
+ *   files.json.gz        — source files (excluding node_modules)
+ *   node_modules.json.gz — pre-installed node_modules
  *
  * Snapshot JSON format (compatible with WebContainer mount() API):
  *   Text files:   { file: { contents: string } }
  *   Binary files: { file: { contents: string (base64), binary: true } }
- *   Symlinks:     { symlink: { target: string } }
+ *   Symlinks:     { file: { symlink: string } }
  *   Directories:  { directory: { ...children } }
  */
 
 import { readdir, readFile, lstat, readlink, mkdir, writeFile } from "fs/promises";
 import { join } from "path";
-import { createHash } from "crypto";
 import { gzip } from "zlib";
 import { promisify } from "util";
 
@@ -35,7 +33,6 @@ const EXCLUDE_SOURCE = new Set([
 ]);
 
 // ── node_modules exclusions (reduce snapshot size) ───────────────────────────
-// Directory names to skip anywhere inside node_modules
 const EXCLUDE_NM_DIRS = new Set([
   "test",
   "tests",
@@ -57,7 +54,6 @@ const EXCLUDE_NM_DIRS = new Set([
   ".vscode",
 ]);
 
-// File extensions to skip inside node_modules
 const EXCLUDE_NM_EXTS = new Set([".map"]); // source maps – large, not needed at runtime
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -149,40 +145,24 @@ async function compress(label, tree, outPath) {
 async function main() {
   await mkdir(OUTPUT, { recursive: true });
 
-  const packageJson = await readFile(join(ROOT, "package.json"), "utf-8");
-  const packageHash = createHash("sha256")
-    .update(packageJson)
-    .digest("hex")
-    .slice(0, 12);
-  const commitSha = (process.env.GITHUB_SHA ?? "local").slice(0, 12);
+  const skipNodeModules = process.env.SKIP_NODE_MODULES === "true";
 
-  console.log(`Commit:       ${commitSha}`);
-  console.log(`PackageHash:  ${packageHash}`);
-
-  // 1. Source files
-  console.log("\n[1/2] Building source files snapshot…");
+  // 1. Source files (always)
+  console.log("[1/2] Building source files snapshot…");
   const filesTree = await buildTree(ROOT, { excludeNames: EXCLUDE_SOURCE });
-  await compress(
-    "files",
-    filesTree,
-    join(OUTPUT, `files-${commitSha}.json.gz`),
-  );
+  await compress("files", filesTree, join(OUTPUT, "files.json.gz"));
 
-  // 2. node_modules
-  console.log("\n[2/2] Building node_modules snapshot…");
-  const nmTree = await buildTree(join(ROOT, "node_modules"), {
-    excludeDirs: EXCLUDE_NM_DIRS,
-    excludeExts: EXCLUDE_NM_EXTS,
-  });
-  await compress(
-    "node_modules",
-    nmTree,
-    join(OUTPUT, `node_modules-${packageHash}.json.gz`),
-  );
-
-  // 3. Shell env file for the upload step
-  const envContent = `SHORT_SHA=${commitSha}\nPACKAGE_HASH=${packageHash}\n`;
-  await writeFile(join(OUTPUT, "snapshot.env"), envContent);
+  // 2. node_modules (skippable when package.json hasn't changed)
+  if (skipNodeModules) {
+    console.log("\n[2/2] Skipping node_modules snapshot (package.json unchanged).");
+  } else {
+    console.log("\n[2/2] Building node_modules snapshot…");
+    const nmTree = await buildTree(join(ROOT, "node_modules"), {
+      excludeDirs: EXCLUDE_NM_DIRS,
+      excludeExts: EXCLUDE_NM_EXTS,
+    });
+    await compress("node_modules", nmTree, join(OUTPUT, "node_modules.json.gz"));
+  }
 
   console.log("\nDone.");
 }
