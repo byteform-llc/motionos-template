@@ -1,0 +1,77 @@
+name: Build WebContainer Snapshot
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build snapshots
+        run: node scripts/build-snapshot.mjs
+        # GITHUB_SHA is provided automatically by the runner
+
+      - name: Upload snapshots to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          source /tmp/wc-snapshots/snapshot.env
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          echo "Uploading files-${SHORT_SHA}.json.gz…"
+          aws s3 cp /tmp/wc-snapshots/files-${SHORT_SHA}.json.gz \
+            s3://${R2_BUCKET_NAME}/snapshots/files-${SHORT_SHA}.json.gz \
+            --endpoint-url "${ENDPOINT}" \
+            --region auto \
+            --content-type "application/json" \
+            --content-encoding "gzip" \
+            --cache-control "public, max-age=31536000, immutable"
+
+          echo "Uploading node_modules-${PACKAGE_HASH}.json.gz…"
+          aws s3 cp /tmp/wc-snapshots/node_modules-${PACKAGE_HASH}.json.gz \
+            s3://${R2_BUCKET_NAME}/snapshots/node_modules-${PACKAGE_HASH}.json.gz \
+            --endpoint-url "${ENDPOINT}" \
+            --region auto \
+            --content-type "application/json" \
+            --content-encoding "gzip" \
+            --cache-control "public, max-age=31536000, immutable"
+
+          echo "Uploading latest.json…"
+          cat > /tmp/wc-snapshots/latest.json << EOF
+          {
+            "commitSha": "${SHORT_SHA}",
+            "packageHash": "${PACKAGE_HASH}",
+            "filesUrl": "${R2_PUBLIC_URL}/snapshots/files-${SHORT_SHA}.json.gz",
+            "nodeModulesUrl": "${R2_PUBLIC_URL}/snapshots/node_modules-${PACKAGE_HASH}.json.gz",
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          aws s3 cp /tmp/wc-snapshots/latest.json \
+            s3://${R2_BUCKET_NAME}/snapshots/latest.json \
+            --endpoint-url "${ENDPOINT}" \
+            --region auto \
+            --content-type "application/json" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+          echo "All snapshots uploaded."
+          echo "  files:        ${R2_PUBLIC_URL}/snapshots/files-${SHORT_SHA}.json.gz"
+          echo "  node_modules: ${R2_PUBLIC_URL}/snapshots/node_modules-${PACKAGE_HASH}.json.gz"
+          echo "  latest:       ${R2_PUBLIC_URL}/snapshots/latest.json"
