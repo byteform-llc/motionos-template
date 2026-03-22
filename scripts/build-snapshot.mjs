@@ -32,7 +32,7 @@ const EXCLUDE_SOURCE = new Set([
   ".github",
   "/src/preview.tsx",
   "/src/preview.css",
-  "/index.html",
+  "index.html",
   "README.md",
 ]);
 
@@ -164,12 +164,14 @@ async function buildTree(dir, opts = {}) {
 // ── Tree visualizer ───────────────────────────────────────────────────────────
 function printTree(tree, prefix = "") {
   const lines = [];
-  const entries = Object.entries(tree).sort(([aName, aNode], [bName, bNode]) => {
-    const aIsDir = !!aNode.directory;
-    const bIsDir = !!bNode.directory;
-    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
-    return aName.localeCompare(bName);
-  });
+  const entries = Object.entries(tree).sort(
+    ([aName, aNode], [bName, bNode]) => {
+      const aIsDir = !!aNode.directory;
+      const bIsDir = !!bNode.directory;
+      if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+      return aName.localeCompare(bName);
+    },
+  );
   for (let i = 0; i < entries.length; i++) {
     const [name, node] = entries[i];
     const isLast = i === entries.length - 1;
@@ -177,7 +179,9 @@ function printTree(tree, prefix = "") {
     const childPrefix = prefix + (isLast ? "    " : "│   ");
     if (node.directory) {
       lines.push(`${prefix}${connector}${name}/`);
-      lines.push(...printTree(node.directory, childPrefix).split("\n").filter(Boolean));
+      lines.push(
+        ...printTree(node.directory, childPrefix).split("\n").filter(Boolean),
+      );
     } else {
       lines.push(`${prefix}${connector}${name}`);
     }
