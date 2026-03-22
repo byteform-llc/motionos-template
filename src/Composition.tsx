@@ -10,6 +10,13 @@ import {
 import { Ring } from "./components/Ring";
 import { OrbitDot } from "./components/OrbitDot";
 
+export const compositionConfig = {
+  durationInFrames: 150,
+  fps: 30,
+  width: 1280,
+  height: 720,
+};
+
 export default function MyComposition() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
