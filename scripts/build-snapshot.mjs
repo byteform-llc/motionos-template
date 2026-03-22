@@ -31,6 +31,8 @@ const EXCLUDE_SOURCE = new Set([
   "scripts",
   ".github",
   "remotion-bundle",
+  "/src/Preview.tsx",
+  "/src/main.tsx",
 ]);
 
 // ── node_modules exclusions (reduce snapshot size) ───────────────────────────
