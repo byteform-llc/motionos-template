@@ -10,13 +10,6 @@ import {
 import { Ring } from "./components/Ring";
 import { OrbitDot } from "./components/OrbitDot";
 
-export const CompositionSettings = {
-  fps: 30,
-  width: 1280,
-  height: 720,
-  durationInFrames: 150,
-};
-
 export default function MyComposition() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -115,7 +108,7 @@ export default function MyComposition() {
       }}
     >
       {/* Pulse rings */}
-      <Sequence>
+      <Sequence from={0}>
         <Ring delay={0} color="#818cf8" />
       </Sequence>
       <Sequence from={Math.round(fps * 0.5)}>
