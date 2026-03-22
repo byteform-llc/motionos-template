@@ -6,6 +6,7 @@ export interface OrbitDotProps {
   delay: number;
   color: string;
   size: number;
+  speed?: number;
 }
 
 export const OrbitDot = ({
@@ -14,6 +15,7 @@ export const OrbitDot = ({
   delay,
   color,
   size,
+  speed = 1,
 }: OrbitDotProps) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -21,10 +23,11 @@ export const OrbitDot = ({
   const appear = spring({
     frame: frame - delay,
     fps,
-    config: { damping: 12, stiffness: 120 },
+    config: { damping: 14, stiffness: 80 },
   });
 
-  const currentAngle = angle + interpolate(frame, [0, 300], [0, Math.PI * 2]);
+  const currentAngle =
+    angle + interpolate(frame, [0, 300], [0, Math.PI * 2 * speed]);
   const x = Math.cos(currentAngle) * radius;
   const y = Math.sin(currentAngle) * radius;
 
@@ -46,7 +49,8 @@ export const OrbitDot = ({
         left: "50%",
         marginLeft: -size / 2,
         marginTop: -size / 2,
-        boxShadow: `0 0 ${size * 2}px ${color}88`,
+        boxShadow: `0 0 ${size * 3}px ${color}66`,
+        filter: `blur(${size < 6 ? 1 : 0}px)`,
       }}
     />
   );
