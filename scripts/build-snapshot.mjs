@@ -30,6 +30,7 @@ const EXCLUDE_SOURCE = new Set([
   "dist",
   "scripts",
   ".github",
+  "remotion-bundle",
 ]);
 
 // ── node_modules exclusions (reduce snapshot size) ───────────────────────────
@@ -197,14 +198,20 @@ async function main() {
 
   // 2. node_modules (skippable when package.json unchanged)
   if (skipNodeModules) {
-    console.log("\n[2/2] Skipping node_modules snapshot (package.json unchanged).");
+    console.log(
+      "\n[2/2] Skipping node_modules snapshot (package.json unchanged).",
+    );
   } else {
     console.log("\n[2/2] Building node_modules snapshot…");
     const nmTree = await buildTree(join(ROOT, "node_modules"), {
       excludeDirs: EXCLUDE_NM_DIRS,
       excludeExts: EXCLUDE_NM_EXTS,
     });
-    const nmUrl = await compressAndUpload("node_modules", nmTree, "node_modules.json.gz");
+    const nmUrl = await compressAndUpload(
+      "node_modules",
+      nmTree,
+      "node_modules.json.gz",
+    );
     console.log(`\n  node_modules URL: ${nmUrl}`);
   }
 
