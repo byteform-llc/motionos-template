@@ -164,7 +164,12 @@ async function buildTree(dir, opts = {}) {
 // ── Tree visualizer ───────────────────────────────────────────────────────────
 function printTree(tree, prefix = "", label = ".") {
   const lines = [`${prefix}${label}/`];
-  const entries = Object.entries(tree);
+  const entries = Object.entries(tree).sort(([aName, aNode], [bName, bNode]) => {
+    const aIsDir = !!aNode.directory;
+    const bIsDir = !!bNode.directory;
+    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+    return aName.localeCompare(bName);
+  });
   for (let i = 0; i < entries.length; i++) {
     const [name, node] = entries[i];
     const isLast = i === entries.length - 1;
