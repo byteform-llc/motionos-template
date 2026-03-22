@@ -16,7 +16,6 @@ import { createWriteStream } from "fs";
 import { join } from "path";
 import { createGzip } from "zlib";
 import { pipeline } from "stream/promises";
-import { Readable } from "stream";
 
 const ROOT = process.cwd();
 const OUTPUT = "/tmp/wc-snapshots";
