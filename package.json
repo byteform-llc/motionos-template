@@ -8,20 +8,20 @@
     "lint": "eslint src && tsc"
   },
   "dependencies": {
-    "@remotion/player": "4.0.436",
-    "@remotion/tailwind-v4": "4.0.436",
+    "@remotion/player": "4.0.438",
+    "@remotion/tailwind-v4": "4.0.438",
     "react": "^19.2.4",
-    "react-dom": "^19.2.3",
-    "remotion": "4.0.436",
-    "tailwindcss": "4.2.1"
+    "react-dom": "^19.2.4",
+    "remotion": "4.0.438",
+    "tailwindcss": "4.2.2"
   },
   "devDependencies": {
-    "@remotion/cli": "^4.0.436",
-    "@remotion/eslint-config-flat": "4.0.436",
-    "@tailwindcss/vite": "^4.2.1",
+    "@remotion/cli": "^4.0.438",
+    "@remotion/eslint-config-flat": "4.0.438",
+    "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/web": "0.0.343",
+    "@types/web": "0.0.344",
     "@vitejs/plugin-react": "^5.2.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
