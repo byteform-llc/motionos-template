@@ -30,8 +30,8 @@ const EXCLUDE_SOURCE = new Set([
   "dist",
   "scripts",
   ".github",
-  "/src/preview.tsx",
-  "/src/preview.css",
+  "src/preview.tsx",
+  "src/preview.css",
   "index.html",
   "README.md",
 ]);
